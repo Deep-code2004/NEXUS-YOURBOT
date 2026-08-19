@@ -1,0 +1,132 @@
+{
+  "users": [
+    {
+      "id": "user_admin_001",
+      "name": "Super Admin",
+      "email": "admin@nexus.os",
+      "passwordHash": "$2b$10$GBREzLE2H3CsNBw.llcBNeNwNwhlPP/OCrWwO4Vs1DhZ2l20jwX3y",
+      "role": "super_admin",
+      "createdAt": "2026-08-19T19:27:06.103Z",
+      "lastActive": "2026-08-19T19:27:06.103Z"
+    },
+    {
+      "id": "user_demo_002",
+      "name": "Demo Pilot",
+      "email": "demo@nexus.os",
+      "passwordHash": "$2b$10$V4FCBjnhnPuh5XAUL22Y5OzQWI7.jNXoToX.nSCMh37Z1IB8T8KRi",
+      "role": "user",
+      "createdAt": "2026-08-19T19:27:06.103Z",
+      "lastActive": "2026-08-19T19:27:06.103Z"
+    }
+  ],
+  "cards": [
+    {
+      "id": "card_todo_001",
+      "userId": "user_demo_002",
+      "title": "TODO",
+      "slug": "todo",
+      "color": "#FF8C00",
+      "items": [
+        {
+          "id": "item_1",
+          "text": "Initialize neural gesture tracking",
+          "done": true,
+          "createdAt": "2026-08-19T19:27:06.103Z"
+        },
+        {
+          "id": "item_2",
+          "text": "Calibrate voice interface frequency",
+          "done": false,
+          "createdAt": "2026-08-19T19:27:06.103Z"
+        },
+        {
+          "id": "item_3",
+          "text": "Review spatial telemetry logs",
+          "done": false,
+          "createdAt": "2026-08-19T19:27:06.103Z"
+        }
+      ],
+      "createdAt": "2026-08-19T19:27:06.103Z",
+      "updatedAt": "2026-08-19T19:27:06.103Z"
+    },
+    {
+      "id": "card_projects_002",
+      "userId": "user_demo_002",
+      "title": "PROJECTS",
+      "slug": "projects",
+      "color": "#4A90E2",
+      "items": [
+        {
+          "id": "item_4",
+          "text": "NEXUS Spatial OS Architecture",
+          "done": true,
+          "createdAt": "2026-08-19T19:27:06.103Z"
+        },
+        {
+          "id": "item_5",
+          "text": "Super Admin Multi-node Deck",
+          "done": false,
+          "createdAt": "2026-08-19T19:27:06.103Z"
+        }
+      ],
+      "createdAt": "2026-08-19T19:27:06.103Z",
+      "updatedAt": "2026-08-19T19:27:06.103Z"
+    },
+    {
+      "id": "card_fitness_003",
+      "userId": "user_demo_002",
+      "title": "FITNESS",
+      "slug": "fitness",
+      "color": "#00C805",
+      "items": [
+        {
+          "id": "item_6",
+          "text": "5km Morning Cyber Run",
+          "done": true,
+          "createdAt": "2026-08-19T19:27:06.103Z"
+        },
+        {
+          "id": "item_7",
+          "text": "Core & Upper Body Workout",
+          "done": false,
+          "createdAt": "2026-08-19T19:27:06.103Z"
+        }
+      ],
+      "createdAt": "2026-08-19T19:27:06.103Z",
+      "updatedAt": "2026-08-19T19:27:06.103Z"
+    },
+    {
+      "id": "card_ai_004",
+      "userId": "user_demo_002",
+      "title": "NEXUS AI",
+      "slug": "nexus-ai",
+      "color": "#FFD700",
+      "items": [
+        {
+          "id": "item_8",
+          "text": "Gemini 2.5 Flash Autonomous Agent active",
+          "done": true,
+          "createdAt": "2026-08-19T19:27:06.103Z"
+        },
+        {
+          "id": "item_9",
+          "text": "Voice intent parsing synchronized",
+          "done": true,
+          "createdAt": "2026-08-19T19:27:06.103Z"
+        }
+      ],
+      "createdAt": "2026-08-19T19:27:06.103Z",
+      "updatedAt": "2026-08-19T19:27:06.103Z"
+    }
+  ],
+  "activityLogs": [
+    {
+      "id": "act_001",
+      "userId": "user_admin_001",
+      "userEmail": "admin@nexus.os",
+      "action": "SYSTEM_BOOT",
+      "details": "NEXUS Spatial OS core systems online",
+      "timestamp": "2026-08-19T19:27:06.103Z"
+    }
+  ]
+}
