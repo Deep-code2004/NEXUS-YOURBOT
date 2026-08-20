@@ -18,6 +18,16 @@ export default function Carousel() {
 
   const [isDragging, setIsDragging] = useState(false);
   const [previousX, setPreviousX] = useState(0);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   // Fetch initial cards for authenticated user on mount or session change
   useEffect(() => {
@@ -62,31 +72,32 @@ export default function Carousel() {
     config: { mass: 2, tension: 170, friction: 26 },
   });
 
-  const radius = Math.max(5, cards.length * 1.1);
+  const radius = Math.max(isMobile ? 4.5 : 5.5, cards.length * (isMobile ? 0.9 : 1.1));
 
   return (
     // @ts-ignore
     <a.group ref={groupRef} rotation={rotation}>
-      {/* Invisible sphere to catch pointer events for dragging */}
+      {/* Catch mouse/touch dragging on 3D space */}
       <mesh
         visible={false}
         onPointerDown={(e) => {
           e.stopPropagation();
           setIsDragging(true);
-          setPreviousX(e.clientX);
+          setPreviousX(e.clientX || (e as any).touches?.[0]?.clientX || 0);
         }}
         onPointerMove={(e) => {
           if (isDragging) {
             e.stopPropagation();
-            const delta = e.clientX - previousX;
-            setTargetRotation((prev) => prev + delta * 0.008);
-            setPreviousX(e.clientX);
+            const clientX = e.clientX || (e as any).touches?.[0]?.clientX || 0;
+            const delta = clientX - previousX;
+            setTargetRotation((prev) => prev + delta * (isMobile ? 0.012 : 0.008));
+            setPreviousX(clientX);
           }
         }}
         onPointerUp={() => setIsDragging(false)}
         onPointerOut={() => setIsDragging(false)}
       >
-        <sphereGeometry args={[20, 16, 16]} />
+        <sphereGeometry args={[25, 16, 16]} />
         <meshBasicMaterial side={2} /> {/* THREE.BackSide */}
       </mesh>
 
