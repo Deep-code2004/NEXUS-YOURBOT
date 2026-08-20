@@ -16,8 +16,6 @@ import {
   User as UserIcon,
   LogIn,
   LogOut,
-  ChevronUp,
-  ChevronDown,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useAIStore, AuthUser } from '@/store/useAIStore';
@@ -25,6 +23,22 @@ import { useVoiceInteraction } from '@/hooks/useVoiceInteraction';
 import AuthModal from './AuthModal';
 import CardInspector from './CardInspector';
 import AdminDeck from './AdminDeck';
+
+function ChevronUpIcon({ className = 'w-3.5 h-3.5' }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
+    </svg>
+  );
+}
+
+function ChevronDownIcon({ className = 'w-3.5 h-3.5' }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+    </svg>
+  );
+}
 
 export default function HUD() {
   const { currentIntent, confidence, webcamError, retryCamera } = useGestureStore();
@@ -44,6 +58,8 @@ export default function HUD() {
     transcript,
     voiceError,
     isSupported,
+    authChecked,
+    setAuthChecked,
   } = useAIStore();
 
   const { startListening, stopListening, sendCommand } = useVoiceInteraction();
@@ -61,14 +77,26 @@ export default function HUD() {
           const data = await res.json();
           if (data.user) {
             setUser(data.user as AuthUser);
+            setAuthModalOpen(false);
+          } else {
+            setUser(null);
+            setAuthModalOpen(true);
           }
+        } else {
+          setUser(null);
+          setAuthModalOpen(true);
         }
-      } catch (err) {}
+      } catch (err) {
+        setUser(null);
+        setAuthModalOpen(true);
+      } finally {
+        setAuthChecked(true);
+      }
     };
     checkSession();
 
     return () => clearInterval(interval);
-  }, [setUser]);
+  }, [setUser, setAuthChecked, setAuthModalOpen]);
 
   const handleLogout = async () => {
     try {
@@ -176,7 +204,7 @@ export default function HUD() {
                 onClick={() => setShowMobileTelemetry(!showMobileTelemetry)}
                 className="p-1 bg-white/5 border border-white/10 rounded text-white/60"
               >
-                {showMobileTelemetry ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                {showMobileTelemetry ? <ChevronUpIcon className="w-3.5 h-3.5" /> : <ChevronDownIcon className="w-3.5 h-3.5" />}
               </button>
             </div>
           </div>

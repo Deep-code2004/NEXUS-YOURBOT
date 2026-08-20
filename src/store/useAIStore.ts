@@ -15,6 +15,8 @@ export interface AuthUser {
 interface AIState {
   user: AuthUser | null;
   setUser: (user: AuthUser | null) => void;
+  authChecked: boolean;
+  setAuthChecked: (val: boolean) => void;
   authModalOpen: boolean;
   setAuthModalOpen: (open: boolean) => void;
 
@@ -39,6 +41,8 @@ interface AIState {
 export const useAIStore = create<AIState>((set) => ({
   user: null,
   setUser: (user) => set({ user }),
+  authChecked: false,
+  setAuthChecked: (val) => set({ authChecked: val }),
   authModalOpen: false,
   setAuthModalOpen: (open) => set({ authModalOpen: open }),
 
