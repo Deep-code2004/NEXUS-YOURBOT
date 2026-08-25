@@ -12,7 +12,7 @@ import { useAIStore } from '@/store/useAIStore';
 export default function Carousel() {
   const groupRef = useRef<Group>(null);
   const [targetRotation, setTargetRotation] = useState(0);
-  const { currentIntent } = useGestureStore();
+  const { currentIntent, steerIntensity, handVelocity, isPinching } = useGestureStore();
   const { cards, setCards, activeCardId } = useSceneStore();
   const { user } = useAIStore();
 
@@ -58,18 +58,28 @@ export default function Carousel() {
     }
   }, [activeCardId, cards]);
 
-  // Simple gesture to rotation mapping
-  useFrame(() => {
+  // Real-time Gestural Carousel Physics & Steering Loop
+  useFrame((_, delta) => {
+    // 1. Continuous Spatial Air Steering
+    if (Math.abs(steerIntensity) > 0.05) {
+      // Rotate proportional to hand distance from center
+      const speed = steerIntensity * (isMobile ? 1.8 : 2.4) * delta;
+      setTargetRotation((prev) => prev + speed);
+    }
+
+    // 2. High-speed Swipe Impulses
     if (currentIntent === 'swipe_left') {
-      setTargetRotation((prev) => prev - 0.04);
+      const step = cards.length > 0 ? (Math.PI * 2) / cards.length : 0.8;
+      setTargetRotation((prev) => prev - step * 0.4);
     } else if (currentIntent === 'swipe_right') {
-      setTargetRotation((prev) => prev + 0.04);
+      const step = cards.length > 0 ? (Math.PI * 2) / cards.length : 0.8;
+      setTargetRotation((prev) => prev + step * 0.4);
     }
   });
 
   const { rotation } = useSpring({
     rotation: [0, targetRotation, 0],
-    config: { mass: 2, tension: 170, friction: 26 },
+    config: { mass: 1.5, tension: 180, friction: 28 },
   });
 
   const radius = Math.max(isMobile ? 4.5 : 5.5, cards.length * (isMobile ? 0.9 : 1.1));
