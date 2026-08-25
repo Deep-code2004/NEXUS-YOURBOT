@@ -314,16 +314,18 @@ export default function HandTrackingProvider({ children }: { children: React.Rea
       let detectedIntent: GestureIntent = 'none';
       let confidenceScore = 0.85;
 
-      // Fast Swipe Detection Check (Cooldown: 400ms)
-      if (Math.abs(vx) > 1.8 && timestamp - lastActionTimeRef.current.swipe > 400) {
+      // Fast Swipe Detection Check (Cooldown: 450ms)
+      if (Math.abs(vx) > 1.8 && timestamp - lastActionTimeRef.current.swipe > 450) {
         if (vx < -1.8) {
           detectedIntent = 'swipe_left';
           confidenceScore = Math.min(1.0, Math.abs(vx) / 3.0);
           lastActionTimeRef.current.swipe = timestamp;
+          useSceneStore.getState().nextCard();
         } else if (vx > 1.8) {
           detectedIntent = 'swipe_right';
           confidenceScore = Math.min(1.0, Math.abs(vx) / 3.0);
           lastActionTimeRef.current.swipe = timestamp;
+          useSceneStore.getState().prevCard();
         }
       } else if (isPinchingNow) {
         detectedIntent = 'pinch';
@@ -333,14 +335,16 @@ export default function HandTrackingProvider({ children }: { children: React.Rea
         setPinchPosition({ x: pinchX, y: pinchY });
         setIsPinching(true);
 
-        // Action: Pinch to inspect or select closest card (Debounce: 600ms)
+        // Action: Pinch to inspect the EXACT centered card (Debounce: 600ms)
         if (timestamp - lastActionTimeRef.current.pinch > 600) {
           lastActionTimeRef.current.pinch = timestamp;
-          // If no card active, select first card or trigger focus
           const currentStore = useSceneStore.getState();
           if (currentStore.cards.length > 0) {
             if (!currentStore.activeCardId) {
-              currentStore.setActiveCardId(currentStore.cards[0].id);
+              const targetCard = currentStore.cards[currentStore.centeredCardIndex] || currentStore.cards[0];
+              if (targetCard) {
+                currentStore.setActiveCardId(targetCard.id);
+              }
             }
           }
         }

@@ -41,8 +41,17 @@ function ChevronDownIcon({ className = 'w-3.5 h-3.5' }: { className?: string }) 
 }
 
 export default function HUD() {
+  const {
+    activeCardId,
+    setActiveCardId,
+    qualityTier,
+    setAdminDeckOpen,
+    cards,
+    centeredCardIndex,
+    nextCard,
+    prevCard,
+  } = useSceneStore();
   const { currentIntent, confidence, webcamError, retryCamera } = useGestureStore();
-  const { activeCardId, qualityTier, setAdminDeckOpen, cards } = useSceneStore();
   const [mounted, setMounted] = useState(false);
   const [time, setTime] = useState<Date | null>(null);
   const [inputText, setInputText] = useState('');
@@ -330,25 +339,83 @@ export default function HUD() {
           </div>
         </div>
 
-        {/* Bottom Bar / Telemetry */}
+        {/* Bottom Bar / Telemetry & Central Card Stepper */}
         <div
-          className={`flex flex-col sm:flex-row justify-between items-end gap-2 transition-all ${
+          className={`flex flex-col sm:flex-row justify-between items-center sm:items-end gap-3 transition-all ${
             showMobileTelemetry ? 'flex' : 'hidden sm:flex'
           }`}
         >
           {/* System Telemetry Log */}
           <div className="bg-black/60 sm:bg-transparent border sm:border-0 border-white/10 rounded-xl p-2.5 sm:p-0 max-w-xs w-full sm:w-auto pointer-events-auto">
             <div className="flex items-center gap-2 mb-1 text-white/50 text-[10px] sm:text-xs">
-              <Box className="w-3.5 h-3.5" />
+              <Box className="w-3.5 h-3.5 text-cyan-400" />
               <span>SYS_TELEMETRY</span>
             </div>
             <div className="text-[9px] sm:text-xs text-white/40 border-l border-white/10 pl-2 leading-relaxed">
-              <div>&gt; 3d neural ring: [ONLINE]</div>
+              <div>&gt; 3D Ring: [ONLINE]</div>
               <div>
-                &gt; focused card: {activeCard ? activeCard.title : 'NONE'}
+                &gt; Target Card: <span className="text-cyan-300 font-bold">{cards[centeredCardIndex]?.title || 'NONE'}</span>
               </div>
             </div>
           </div>
+
+          {/* Central Holographic Spatial Carousel Navigator */}
+          {cards.length > 0 && (
+            <div className="pointer-events-auto flex flex-col items-center gap-1.5 bg-black/60 backdrop-blur-xl border border-white/15 px-3 py-2 rounded-2xl shadow-[0_0_30px_rgba(0,0,0,0.5)]">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={prevCard}
+                  title="Previous Card (← or Swipe Right)"
+                  className="p-1.5 bg-white/5 hover:bg-white/15 border border-white/10 hover:border-cyan-500/40 text-white rounded-lg transition-all cursor-pointer"
+                >
+                  <ChevronDownIcon className="w-4 h-4 -rotate-90" />
+                </button>
+
+                <div className="flex items-center gap-2 px-2.5 py-1 bg-white/5 border border-white/10 rounded-xl">
+                  <div
+                    className="w-2.5 h-2.5 rounded-full animate-pulse"
+                    style={{ backgroundColor: cards[centeredCardIndex]?.color || '#00e5ff' }}
+                  />
+                  <span
+                    className="text-xs sm:text-sm font-bold tracking-wider uppercase truncate max-w-[130px] sm:max-w-[160px]"
+                    style={{ color: cards[centeredCardIndex]?.color || '#ffffff' }}
+                  >
+                    {cards[centeredCardIndex]?.title}
+                  </span>
+                  <span className="text-[9px] text-white/40">
+                    {centeredCardIndex + 1}/{cards.length}
+                  </span>
+                </div>
+
+                <button
+                  onClick={nextCard}
+                  title="Next Card (→ or Swipe Left)"
+                  className="p-1.5 bg-white/5 hover:bg-white/15 border border-white/10 hover:border-cyan-500/40 text-white rounded-lg transition-all cursor-pointer"
+                >
+                  <ChevronDownIcon className="w-4 h-4 rotate-90" />
+                </button>
+
+                <button
+                  onClick={() => {
+                    const target = cards[centeredCardIndex];
+                    if (target) setActiveCardId(target.id);
+                  }}
+                  className="px-2.5 py-1.5 bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/40 text-cyan-300 rounded-lg text-[10px] sm:text-xs font-bold uppercase transition-all cursor-pointer shadow-[0_0_15px_rgba(0,229,255,0.2)]"
+                >
+                  Inspect
+                </button>
+              </div>
+
+              {/* Interaction Hint */}
+              <div className="text-[8px] sm:text-[9px] text-white/40 flex items-center gap-2">
+                <span>GESTURES: 🤏 PINCH (OPEN)</span>
+                <span>•</span>
+                <span>💨 SWIPE (STEP)</span>
+                <span>•</span>
+                <span>✊ FIST (CLOSE)</span>
+              </div>
+            </div>
+          )}
 
           {/* Gesture Tracking Telemetry */}
           <div className="flex flex-col items-end gap-1.5 text-right bg-white/5 backdrop-blur-md border border-white/10 p-2.5 sm:p-3 rounded-xl pointer-events-auto w-full sm:w-auto">

@@ -1,7 +1,6 @@
 'use client';
 
 import { useRef, useState, useEffect } from 'react';
-import { useFrame } from '@react-three/fiber';
 import { Group } from 'three';
 import { useSpring, a } from '@react-spring/three';
 import ModuleCard from './ModuleCard';
@@ -11,14 +10,15 @@ import { useAIStore } from '@/store/useAIStore';
 
 export default function Carousel() {
   const groupRef = useRef<Group>(null);
-  const [targetRotation, setTargetRotation] = useState(0);
-  const { currentIntent, steerIntensity, handVelocity, isPinching } = useGestureStore();
-  const { cards, setCards, activeCardId } = useSceneStore();
+  const { currentIntent, steerIntensity } = useGestureStore();
+  const { cards, setCards, activeCardId, setActiveCardId, centeredCardIndex, setCenteredCardIndex, nextCard, prevCard } = useSceneStore();
   const { user } = useAIStore();
 
+  const [dragOffsetAngle, setDragOffsetAngle] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [previousX, setPreviousX] = useState(0);
   const [isMobile, setIsMobile] = useState(false);
+  const lastSteerStepRef = useRef<number>(0);
 
   useEffect(() => {
     const checkMobile = () => {
@@ -47,39 +47,62 @@ export default function Carousel() {
     fetchUserCards();
   }, [user, setCards]);
 
-  // Automatically rotate to the active card when selected by AI or click
+  // Synchronize centeredCardIndex when an activeCardId is selected
   useEffect(() => {
     if (activeCardId && cards.length > 0) {
       const index = cards.findIndex((c) => c.id === activeCardId);
-      if (index !== -1) {
-        const angle = (index / cards.length) * Math.PI * 2;
-        setTargetRotation(-angle);
+      if (index !== -1 && index !== centeredCardIndex) {
+        setCenteredCardIndex(index);
       }
     }
-  }, [activeCardId, cards]);
+  }, [activeCardId, cards, centeredCardIndex, setCenteredCardIndex]);
 
-  // Real-time Gestural Carousel Physics & Steering Loop
-  useFrame((_, delta) => {
-    // 1. Continuous Spatial Air Steering
-    if (Math.abs(steerIntensity) > 0.05) {
-      // Rotate proportional to hand distance from center
-      const speed = steerIntensity * (isMobile ? 1.8 : 2.4) * delta;
-      setTargetRotation((prev) => prev + speed);
-    }
+  // Air Steering Rhythmic Stepper: Moves exactly 1 card with a comfortable interval
+  useEffect(() => {
+    if (cards.length <= 1) return;
+    const now = Date.now();
 
-    // 2. High-speed Swipe Impulses
-    if (currentIntent === 'swipe_left') {
-      const step = cards.length > 0 ? (Math.PI * 2) / cards.length : 0.8;
-      setTargetRotation((prev) => prev - step * 0.4);
-    } else if (currentIntent === 'swipe_right') {
-      const step = cards.length > 0 ? (Math.PI * 2) / cards.length : 0.8;
-      setTargetRotation((prev) => prev + step * 0.4);
+    if (Math.abs(steerIntensity) > 0.45 && now - lastSteerStepRef.current > 600) {
+      lastSteerStepRef.current = now;
+      if (steerIntensity > 0) {
+        nextCard();
+      } else {
+        prevCard();
+      }
     }
-  });
+  }, [steerIntensity, cards.length, nextCard, prevCard]);
+
+  // Keyboard arrow navigation support
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === 'ArrowRight') {
+        nextCard();
+      } else if (e.key === 'ArrowLeft') {
+        prevCard();
+      } else if (e.key === 'Enter' || e.key === ' ') {
+        if (cards.length > 0 && !activeCardId) {
+          setActiveCardId(cards[centeredCardIndex].id);
+        }
+      } else if (e.key === 'Escape') {
+        if (activeCardId) {
+          setActiveCardId(null);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [nextCard, prevCard, cards, centeredCardIndex, activeCardId, setActiveCardId]);
+
+  // Calculate base angle for centered card
+  const angleStep = cards.length > 0 ? (Math.PI * 2) / cards.length : 0;
+  const baseTargetAngle = -centeredCardIndex * angleStep;
+  const currentTotalAngle = baseTargetAngle + dragOffsetAngle;
 
   const { rotation } = useSpring({
-    rotation: [0, targetRotation, 0],
-    config: { mass: 1.5, tension: 180, friction: 28 },
+    rotation: [0, currentTotalAngle, 0],
+    config: { mass: 1.2, tension: 200, friction: 24 },
   });
 
   const radius = Math.max(isMobile ? 4.5 : 5.5, cards.length * (isMobile ? 0.9 : 1.1));
@@ -87,7 +110,7 @@ export default function Carousel() {
   return (
     // @ts-ignore
     <a.group ref={groupRef} rotation={rotation}>
-      {/* Catch mouse/touch dragging on 3D space */}
+      {/* 3D Drag Plane for Mouse / Touch interaction */}
       <mesh
         visible={false}
         onPointerDown={(e) => {
@@ -100,12 +123,35 @@ export default function Carousel() {
             e.stopPropagation();
             const clientX = e.clientX || (e as any).touches?.[0]?.clientX || 0;
             const delta = clientX - previousX;
-            setTargetRotation((prev) => prev + delta * (isMobile ? 0.012 : 0.008));
+            setDragOffsetAngle((prev) => prev + delta * (isMobile ? 0.009 : 0.006));
             setPreviousX(clientX);
           }
         }}
-        onPointerUp={() => setIsDragging(false)}
-        onPointerOut={() => setIsDragging(false)}
+        onPointerUp={() => {
+          if (isDragging) {
+            setIsDragging(false);
+            if (cards.length > 0) {
+              // Magnetically snap to the nearest exact card index
+              const approxShift = -dragOffsetAngle / angleStep;
+              const roundedShift = Math.round(approxShift);
+              const newIndex = ((centeredCardIndex + roundedShift) % cards.length + cards.length) % cards.length;
+              setCenteredCardIndex(newIndex);
+              setDragOffsetAngle(0);
+            }
+          }
+        }}
+        onPointerOut={() => {
+          if (isDragging) {
+            setIsDragging(false);
+            if (cards.length > 0) {
+              const approxShift = -dragOffsetAngle / angleStep;
+              const roundedShift = Math.round(approxShift);
+              const newIndex = ((centeredCardIndex + roundedShift) % cards.length + cards.length) % cards.length;
+              setCenteredCardIndex(newIndex);
+              setDragOffsetAngle(0);
+            }
+          }
+        }}
       >
         <sphereGeometry args={[25, 16, 16]} />
         <meshBasicMaterial side={2} /> {/* THREE.BackSide */}
@@ -115,6 +161,7 @@ export default function Carousel() {
         const angle = (index / Math.max(1, cards.length)) * Math.PI * 2;
         const x = Math.sin(angle) * radius;
         const z = Math.cos(angle) * radius;
+        const isCentered = index === centeredCardIndex;
 
         return (
           <ModuleCard
@@ -122,6 +169,7 @@ export default function Carousel() {
             card={card}
             position={[x, 0, z]}
             rotation={[0, angle, 0]}
+            isCentered={isCentered}
           />
         );
       })}

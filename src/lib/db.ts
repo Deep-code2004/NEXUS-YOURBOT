@@ -12,6 +12,7 @@ export interface User {
   role: UserRole;
   createdAt: string;
   lastActive: string;
+  adminNotes?: string;
 }
 
 export interface CardItem {
@@ -267,7 +268,7 @@ export function updateLastActive(userId: string) {
   }
 }
 
-export function getAllUsers(): { id: string; name: string; email: string; role: UserRole; createdAt: string; lastActive: string; cardCount: number; itemCount: number }[] {
+export function getAllUsers(): { id: string; name: string; email: string; role: UserRole; createdAt: string; lastActive: string; adminNotes?: string; cardCount: number; itemCount: number }[] {
   const db = ensureDB();
   return db.users.map((u) => {
     const userCards = db.cards.filter((c) => c.userId === u.id);
@@ -279,10 +280,28 @@ export function getAllUsers(): { id: string; name: string; email: string; role: 
       role: u.role,
       createdAt: u.createdAt,
       lastActive: u.lastActive,
+      adminNotes: u.adminNotes || '',
       cardCount: userCards.length,
       itemCount,
     };
   });
+}
+
+export function updateUserAdminNotes(userId: string, notes: string): boolean {
+  const db = ensureDB();
+  const user = db.users.find((u) => u.id === userId);
+  if (user) {
+    user.adminNotes = notes;
+    saveDB(db);
+    logActivity({
+      userId: user.id,
+      userEmail: user.email,
+      action: 'ADMIN_NOTE_UPDATED',
+      details: `Admin updated notes for ${user.email}`,
+    });
+    return true;
+  }
+  return false;
 }
 
 // Card Methods
