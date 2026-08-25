@@ -8,9 +8,10 @@ import HandVisualizerHUD from './HandVisualizerHUD';
 
 export default function HandTrackingProvider({ children }: { children: React.ReactNode }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const landmarkerRef = useRef<HandLandmarker | null>(null);
   const requestRef = useRef<number>(0);
+  const streamRef = useRef<MediaStream | null>(null);
+  const isInitializingRef = useRef<boolean>(false);
   const historyRef = useRef<{ x: number; y: number; time: number }[]>([]);
   const lastActionTimeRef = useRef<{ pinch: number; fist: number; swipe: number; thumbs: number }>({
     pinch: 0,
@@ -36,16 +37,87 @@ export default function HandTrackingProvider({ children }: { children: React.Rea
     setRetryCamera,
   } = useGestureStore();
 
-  const { activeCardId, setActiveCardId, cards } = useSceneStore();
-
   useEffect(() => {
     let active = true;
-    let stream: MediaStream | null = null;
+
+    // Helper: Progressively attempt camera acquisition with graceful constraint fallbacks
+    const acquireCameraStream = async (): Promise<MediaStream> => {
+      const constraintOptions: MediaStreamConstraints[] = [
+        // 1. Standard lightweight desktop / mobile constraints (no strict facingMode to prevent driver lock)
+        {
+          video: {
+            width: { ideal: 640 },
+            height: { ideal: 480 },
+          },
+          audio: false,
+        },
+        // 2. Generic true fallback (works universally across Windows Media Foundation / DirectShow)
+        {
+          video: true,
+          audio: false,
+        },
+        // 3. FacingMode user for mobile devices
+        {
+          video: {
+            facingMode: 'user',
+          },
+          audio: false,
+        },
+      ];
+
+      let lastError: any = null;
+
+      for (const constraints of constraintOptions) {
+        if (!active) throw new Error('Component unmounted');
+        try {
+          // Release previous stream tracks before re-requesting
+          if (streamRef.current) {
+            streamRef.current.getTracks().forEach((t) => t.stop());
+            streamRef.current = null;
+          }
+
+          const stream = await navigator.mediaDevices.getUserMedia(constraints);
+          if (stream && stream.getVideoTracks().length > 0) {
+            return stream;
+          }
+        } catch (err: any) {
+          lastError = err;
+          console.warn('Camera constraint attempt failed, trying fallback constraint:', err.name, err.message);
+
+          if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+            throw err;
+          }
+
+          // Small delay before next constraint attempt to allow camera driver buffer to flush
+          await new Promise((r) => setTimeout(r, 250));
+        }
+      }
+
+      // If all fallbacks failed, try selecting the first available video input device explicitly
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = devices.filter((d) => d.kind === 'videoinput');
+        if (videoDevices.length > 0) {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { deviceId: { exact: videoDevices[0].deviceId } },
+            audio: false,
+          });
+          return stream;
+        }
+      } catch (devErr) {
+        // ignore device enum error
+      }
+
+      throw lastError || new Error('Timeout starting video source');
+    };
 
     const initializeMediaPipeAndCamera = async () => {
+      if (isInitializingRef.current) return;
+      isInitializingRef.current = true;
+
       setWebcamError('Initializing Neural Hand Model...');
 
-      // 1. Try loading MediaPipe Vision Tasks with fallback CDN versions
+      // 1. Try loading MediaPipe Vision Tasks with fallback CDN mirrors
       const cdnUrls = [
         'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm',
         'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm',
@@ -65,10 +137,11 @@ export default function HandTrackingProvider({ children }: { children: React.Rea
 
       if (!vision) {
         setWebcamError('Neural model assets unavailable. Check internet connection.');
+        isInitializingRef.current = false;
         return;
       }
 
-      // 2. Initialize HandLandmarker with GPU delegate first, fallback to CPU
+      // 2. Initialize HandLandmarker (GPU with CPU fallback)
       let landmarker: HandLandmarker | null = null;
       try {
         landmarker = await HandLandmarker.createFromOptions(vision, {
@@ -95,59 +168,68 @@ export default function HandTrackingProvider({ children }: { children: React.Rea
         } catch (cpuErr) {
           console.error('Failed to load HandLandmarker on CPU and GPU:', cpuErr);
           setWebcamError('Hand tracking initialization failed.');
+          isInitializingRef.current = false;
           return;
         }
       }
 
       if (!active) {
         landmarker?.close();
+        isInitializingRef.current = false;
         return;
       }
 
       landmarkerRef.current = landmarker;
 
-      // 3. Start Camera Video Stream
-      const startCamera = async () => {
+      // 3. Start Camera Video Stream with Timeout Resilience
+      const startCamera = async (isRetry = false) => {
         try {
-          setWebcamError('Requesting camera access...');
-          stream = await navigator.mediaDevices.getUserMedia({
-            video: {
-              width: { ideal: 640 },
-              height: { ideal: 480 },
-              facingMode: 'user',
-            },
-            audio: false,
-          });
+          setWebcamError(isRetry ? 'Reconnecting to camera...' : 'Requesting camera access...');
+          const stream = await acquireCameraStream();
 
           if (!active) {
             stream.getTracks().forEach((t) => t.stop());
             return;
           }
 
+          streamRef.current = stream;
+
           if (videoRef.current) {
             videoRef.current.srcObject = stream;
-            videoRef.current.onloadedmetadata = async () => {
+
+            // Wait for video to be ready and playing
+            const handlePlay = async () => {
               try {
                 await videoRef.current?.play();
                 setCameraActive(true);
                 setWebcamError(null);
                 startPredictionLoop();
-              } catch (playErr) {
-                console.error('Video play error:', playErr);
+              } catch (playErr: any) {
+                console.warn('Video play deferred or blocked:', playErr);
               }
             };
+
+            if (videoRef.current.readyState >= 2) {
+              await handlePlay();
+            } else {
+              videoRef.current.onloadeddata = handlePlay;
+            }
           }
         } catch (camErr: any) {
-          console.error('Webcam permission error:', camErr);
-          setWebcamError(
-            camErr.name === 'NotAllowedError'
-              ? 'Camera permission denied. Please allow camera in browser.'
-              : 'No camera device found or camera in use.'
-          );
+          console.warn('Webcam acquisition note:', camErr?.name, camErr?.message);
+          if (camErr?.name === 'NotAllowedError' || camErr?.name === 'PermissionDeniedError') {
+            setWebcamError('Camera permission denied. Please allow camera in browser.');
+          } else if (camErr?.name === 'AbortError') {
+            setWebcamError('Camera source busy or timed out. Click Retry.');
+          } else {
+            setWebcamError('Camera unavailable. Touch & mouse controls active.');
+          }
+        } finally {
+          isInitializingRef.current = false;
         }
       };
 
-      setRetryCamera(startCamera);
+      setRetryCamera(() => startCamera(true));
       await startCamera();
     };
 
@@ -188,7 +270,7 @@ export default function HandTrackingProvider({ children }: { children: React.Rea
             setSteerIntensity(0);
           }
         } catch (detectErr) {
-          // Frame skip or timestamp collision
+          // Frame skip
         }
 
         requestRef.current = requestAnimationFrame(predict);
@@ -197,7 +279,7 @@ export default function HandTrackingProvider({ children }: { children: React.Rea
       requestRef.current = requestAnimationFrame(predict);
     };
 
-    // Sophisticated Hand Gesture Classifier & Spatial Action Dispatcher
+    // Hand Gesture Classifier & Spatial Action Dispatcher
     const processHandLandmarks = (landmarks: Landmark3D[], timestamp: number) => {
       setHandPresent(true);
       setHandLandmarks(landmarks);
@@ -269,7 +351,7 @@ export default function HandTrackingProvider({ children }: { children: React.Rea
         indexTip.z - thumbTip.z
       );
       const normalizedPinchDist = pinchDist / handScale;
-      const isPinchingNow = normalizedPinchDist < 0.35; // Calibrated robust threshold
+      const isPinchingNow = normalizedPinchDist < 0.35;
 
       // 4. Fist Recognition (All fingers curled down toward palm)
       const isFist =
@@ -304,9 +386,9 @@ export default function HandTrackingProvider({ children }: { children: React.Rea
       // 9. Continuous Spatial Air Steering (-1.0 to +1.0)
       let steer = 0;
       if (mirroredPalmX < 0.38) {
-        steer = (mirroredPalmX - 0.38) / 0.38; // Negative (tilt/glide left)
+        steer = (mirroredPalmX - 0.38) / 0.38;
       } else if (mirroredPalmX > 0.62) {
-        steer = (mirroredPalmX - 0.62) / 0.38; // Positive (tilt/glide right)
+        steer = (mirroredPalmX - 0.62) / 0.38;
       }
       setSteerIntensity(steer);
 
@@ -407,14 +489,20 @@ export default function HandTrackingProvider({ children }: { children: React.Rea
 
     return () => {
       active = false;
+      isInitializingRef.current = false;
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+      }
+      if (videoRef.current) {
+        videoRef.current.srcObject = null;
+      }
       if (landmarkerRef.current) {
         landmarkerRef.current.close();
+        landmarkerRef.current = null;
       }
       if (requestRef.current) {
         cancelAnimationFrame(requestRef.current);
-      }
-      if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
       }
     };
   }, [
